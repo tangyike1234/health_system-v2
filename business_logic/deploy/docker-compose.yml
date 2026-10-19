@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./ecg_health.db
+    volumes:
+      - ./data:/app/data
+
+  # TODO: 添加其他服务
