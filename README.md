@@ -34,25 +34,25 @@ npm run build
 
 | 成员 | 主责业务 | 对应代码 |
 |---|---|---|
-| 李运嘉 | 应用公共框架；账号与家庭协同的页面和接口 | frontend 的 App/Layout/Login/Family；api/auth.py、api/family.py、services/family.py |
-| 王书阁 | 心电记录与分析使用流程的页面和接口；业务框架与数据库 | frontend 的 Analyze/Records/Dashboard/Waveform；api/analyze.py、services/records.py、storage.py、main.py |
-| 刘源 | 硬件、数据接收、设备控制及采集集成 | hardware/；api/acquisition.py 与两位软件负责人协作 |
-| 林玄初 | 数据获取、文件解析、质量、滤波、R 峰/特征与切分 | data/、signal_processing/ |
-| 唐一可 | 标签/患者级划分、模型训练评价；完整分析流水线与模型集成 | ai_model/pipeline.py、inference/、eval/、models/ |
+| 应用公共框架；账号与家庭协同的页面和接口 | frontend 的 App/Layout/Login/Family；api/auth.py、api/family.py、services/family.py |
+| 心电记录与分析使用流程的页面和接口；业务框架与数据库 | frontend 的 Analyze/Records/Dashboard/Waveform；api/analyze.py、services/records.py、storage.py、main.py |
+| 硬件、数据接收、设备控制及采集集成 | hardware/；api/acquisition.py 与两位软件负责人协作 |
+| 数据获取、文件解析、质量、滤波、R 峰/特征与切分 | data/、signal_processing/ |
+| 标签/患者级划分、模型训练评价；完整分析流水线与模型集成 | ai_model/pipeline.py、inference/、eval/、models/ |
 
-两位软件人员各负责一条业务线的页面及接口。硬件集成归刘源，信号算法归林玄初，模型和分析流水线集成归唐一可；王书阁调用统一分析入口，维护任务与持久化。详见 [具体任务与交接](docs/team_assignment.md)。
+两位软件人员各负责一条业务线的页面及接口。硬件集成归组员1，信号算法归组员2，模型和分析流水线集成归组员3；组员4调用统一分析入口，维护任务与持久化。详见 [具体任务与交接](docs/team_assignment.md)。
 
 ## 数据链路
 
 ```mermaid
 flowchart LR
-  A[采集/合成回放 刘源] --> C[标准信号与质量 林玄初]
-  B[CSV 上传 王书阁] --> C
-  C --> D[统一分析入口与模型 唐一可]
-  D --> E[记录与数据库 王书阁]
-  E --> F[分析/历史页面 王书阁]
-  G[身份与家属授权 李运嘉] --> E
-  G --> H[家庭协同页面 李运嘉]
+  A[采集/合成回放] --> C[标准信号与质量]
+  B[CSV 上传] --> C
+  C --> D[统一分析入口与模型]
+  D --> E[记录与数据库]
+  E --> F[分析/历史页面]
+  G[身份与家属授权] --> E
+  G --> H[家庭协同页面]
 ```
 
 ## 已接通与待开发
