@@ -1,43 +1,11 @@
-# 数据 Schema
+# 数据与模块契约
 
-## 版本: 1.0 | 更新: 2026-10-19
+首版输入：samples（单通道数值数组）、sample_rate_hz、unit=mV、lead、source。CSV 为单列数值，可含 value/sample/mv 表头；其他列必须拒绝以免把时间列当信号。合成输入 source=synthetic_replay。后续设备增加 captured_at、sequence 和缺失标记。
 
-## 概述
+`process(signal)` 返回 quality、waveform、sample_rate_hz、unit、duration_sec、heart_rate_bpm=null、processing_version。quality 包含 status、reasons、scope；目前只做长度/平直/有限值检查。
 
-系统核心数据结构定义。
+`analyze(signal)` 是软件唯一分析入口，附加 source、mode=framework_demo、prediction。prediction 含 status、label、confidence、model_version、explanation。模型不可用时后三个值为空；低质量跳过分类。心拍标签与记录级心律结论不能混用。
 
-## ECG 信号
+Record：id、created_at（UTC ISO）、task_status、result。当前同步执行，completed 代表流水线结束，不表示模型已有输出。后续模型还需标签版本、配置、输入来源追溯和窗口位置。
 
-```typescript
-interface ECGSignal {
-  samples: number[];        // 采样值
-  sample_rate: number;      // 采样率 (Hz)
-  duration_ms: number;      // 持续时间 (ms)
-  lead_type: "single" | "12-lead";
-}
-```
-
-## 分析结果
-
-```typescript
-interface AnalysisResult {
-  task_id: string;
-  status: "pending" | "completed" | "failed";
-  classification: {
-    rhythm: string;
-    confidence: number;     // 0-1
-  };
-  signal_quality: number;   // 0-1
-}
-```
-
-## TODO
-
-- [ ] 补充完整类型定义
-- [ ] 添加 JSON Schema
-- [ ] 添加 Protobuf 定义 (可选)
-
-## 负责人更新
-
-| 日期 | 更新内容 |
-|------|----------|
+用户/会话/记录/授权/通知表由 `business_logic/app/services/storage.py` 初始化。记录 owner_id 与会话 user_id 关联；共享查询必须匹配有效授权。撤回限制后续查询，不能抹除已被查看或下载的副本。

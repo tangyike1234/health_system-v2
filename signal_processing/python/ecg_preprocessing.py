@@ -1,74 +1,37 @@
-"""
-ECG 信号预处理模块
+"""林玄初：首版 CSV 解析与基础有效性检查；正式滤波/峰检测待实现。"""
+import csv
+import io
+import math
 
-占位函数，待实现。
-"""
+def parse_csv(text, sample_rate_hz):
+    rows = list(csv.reader(io.StringIO(text)))
+    values = []
+    for index, row in enumerate(rows):
+        if not row or not row[0].strip():
+            continue
+        if len(row) != 1:
+            raise ValueError('CSV 必须为单列信号，不能把时间列当幅值')
+        try:
+            values.append(float(row[0]))
+        except ValueError:
+            if index == 0 and row[0].strip().lower() in ('value', 'sample', 'mv'):
+                continue
+            raise ValueError('CSV 仅支持单列数值，可含 value/sample/mv 表头')
+    return {'samples': values, 'sample_rate_hz': sample_rate_hz, 'unit': 'mV', 'lead': 'user_single_lead', 'source': 'csv_import'}
 
-import numpy as np
-from typing import Tuple, Optional
-
-
-def load_signal(filepath: str) -> Tuple[np.ndarray, dict]:
-    """
-    加载 ECG 信号文件
-    
-    Args:
-        filepath: 文件路径
-    
-    Returns:
-        (信号数组, 元数据字典)
-    
-    TODO:
-        - 支持 .dat, .csv, .edf 格式
-        - 返回采样率、时长等元数据
-    """
-    pass
-
-
-def apply_filters(signal: np.ndarray, sample_rate: int = 500) -> np.ndarray:
-    """
-    应用滤波器链
-    
-    Args:
-        signal: 原始信号
-        sample_rate: 采样率
-    
-    Returns:
-        滤波后信号
-    
-    TODO:
-        - 高通滤波 (0.5Hz 去除基线漂移)
-        - 低通滤波 (45Hz 去除高频噪声)
-        - 工频陷波 (50Hz)
-    """
-    pass
-
-
-def detect_r_peaks(signal: np.ndarray, sample_rate: int = 500) -> np.ndarray:
-    """
-    R 峰检测
-    
-    Args:
-        signal: 预处理后信号
-        sample_rate: 采样率
-    
-    Returns:
-        R 峰位置索引数组
-    
-    TODO:
-        - 实现 Pan-Tompkins 或类似算法
-        - 返回峰位置列表
-    """
-    pass
-
-
-def compute_features(rpeaks: np.ndarray, sample_rate: int = 500) -> dict:
-    """
-    计算 HRV 等特征
-    
-    TODO:
-        - 心率
-        - RMSSD
-        - 其他 HRV 指标
-    """
-    pass
+def process(signal):
+    values = signal.get('samples', [])
+    rate = float(signal.get('sample_rate_hz', 0))
+    if not math.isfinite(rate) or not 50 <= rate <= 2000:
+        raise ValueError('采样率须在 50–2000 Hz 之间')
+    if not isinstance(values, list) or len(values) > 200000:
+        raise ValueError('样本必须为列表，最多 200000 点')
+    values = [float(v) for v in values]
+    if not all(math.isfinite(v) for v in values):
+        raise ValueError('样本含非有限值')
+    reasons = []
+    if len(values) < rate*2:
+        reasons.append('记录短于 2 秒')
+    if not values or max(values)-min(values) < 0.000001:
+        reasons.append('空信号或平直信号')
+    return {'quality': {'status': 'insufficient' if reasons else 'basic_checks_passed', 'reasons': reasons, 'scope': '仅检查长度与平直；未验证噪声和临床可用性'}, 'waveform': values, 'sample_rate_hz': rate, 'unit': signal.get('unit', 'mV'), 'duration_sec': len(values)/rate, 'heart_rate_bpm': None, 'processing_version': 'basic-validation-v0'}
