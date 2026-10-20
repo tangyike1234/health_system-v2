@@ -1,88 +1,17 @@
-/**
- * 登录页面
- */
-
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../stores';
-import api from '../services/api';
-
-const Login = () => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  
-  const { login } = useAuthStore();
-  const navigate = useNavigate();
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setIsLoading(true);
-
+// 李运嘉：身份页面及其接口。
+import { useState, FormEvent } from 'react';
+import { post } from '../services/api';
+export default function Login({onLogin}:{onLogin:()=>void}) {
+  const [username,setUsername]=useState(''), [password,setPassword]=useState(''), [message,setMessage]=useState(''), [busy,setBusy]=useState(false);
+  async function submit(register=false) {
+    setBusy(true);setMessage('');
     try {
-      const response = await api.login(username, password);
-      login(username, response.access_token);
-      navigate('/');
-    } catch (err) {
-      setError('用户名或密码错误');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center mb-6">ECG Health System</h1>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              用户名
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="input"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              密码
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="input"
-              required
-            />
-          </div>
-
-          {error && (
-            <p className="text-sm text-red-600">{error}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="btn btn-primary w-full"
-          >
-            {isLoading ? '登录中...' : '登录'}
-          </button>
-        </form>
-
-        <p className="mt-4 text-center text-sm text-gray-500">
-          默认账号: admin / admin123
-        </p>
-      </div>
-    </div>
-  );
-};
-
-export default Login;
+      if(register){await post('/auth/register',{username,password});setMessage('注册成功，请登录');}
+      else {const data=await post<{token:string}>('/auth/login',{username,password});sessionStorage.setItem('ecg_token',data.token);onLogin();}
+    } catch(e){setMessage((e as Error).message);}finally{setBusy(false);}
+  }
+  return <main className="login"><section><p className="eyebrow">用户与家庭协同 · 李运嘉</p><h1>开始健康记录</h1><p>创建本地账号，查看自己的记录与家庭授权。</p>
+    <form onSubmit={(e:FormEvent)=>{e.preventDefault();void submit();}}><label>用户名<input required value={username} onChange={e=>setUsername(e.target.value)} autoComplete="username" /></label>
+    <label>密码（至少 8 位）<input required type="password" minLength={8} value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" /></label>
+    <div className="actions"><button disabled={busy}>登录</button><button disabled={busy || !username || password.length<8} type="button" className="secondary" onClick={()=>void submit(true)}>注册</button></div></form><p role="status">{message}</p></section></main>;
+}

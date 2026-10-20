@@ -1,13 +1,11 @@
-version: '3.8'
-
 services:
   backend:
-    build: .
+    build:
+      context: ../..
+      dockerfile: business_logic/deploy/Dockerfile
     ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=sqlite:///./ecg_health.db
+      - "127.0.0.1:8000:8000"
     volumes:
-      - ./data:/app/data
-
-  # TODO: 添加其他服务
+      - health-runtime:/app/runtime
+volumes:
+  health-runtime:

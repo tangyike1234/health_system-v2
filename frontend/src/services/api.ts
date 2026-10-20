@@ -1,126 +1,25 @@
-/**
- * ECG Health System - API 服务层
- */
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
-
-interface ApiResponse<T> {
-  data?: T;
-  error?: {
-    code: string;
-    message: string;
-  };
+// 共享请求适配；各业务页面由对应负责人维护。
+export interface RecordResult {
+  id: string; created_at: string; task_status: string;
+  result: {source: string; waveform: number[]; sample_rate_hz: number; unit: string; duration_sec: number;
+    quality: {status: string; reasons: string[]; scope: string};
+    prediction: {status: string; label: string | null; confidence: number | null; explanation: string};};
 }
-
-class ApiClient {
-  private baseUrl: string;
-  private token: string | null = null;
-
-  constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
+export interface RecordRow {id: string; created_at: string;}
+export interface Grant {id: string; username: string; active: number;}
+export interface Notification {id: string; message: string; status: string;}
+const base = '/api/v1';
+export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers = new Headers(options.headers);
+  const token = sessionStorage.getItem('ecg_token');
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
+  const response = await fetch(base + path, {...options, headers});
+  const data = await response.json();
+  if (!response.ok) {
+    if (response.status === 401) {sessionStorage.removeItem('ecg_token'); window.dispatchEvent(new Event('ecg:logout'));}
+    throw new Error(typeof data.detail === 'string' ? data.detail : `请求失败 (${response.status})`);
   }
-
-  setToken(token: string | null) {
-    this.token = token;
-  }
-
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    };
-
-    if (this.token) {
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${this.token}`;
-    }
-
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      ...options,
-      headers,
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Request failed' }));
-      throw new Error(error.message || `HTTP ${response.status}`);
-    }
-
-    return response.json();
-  }
-
-  // ============ 认证 ============
-
-  async login(username: string, password: string) {
-    const formData = new URLSearchParams();
-    formData.append('username', username);
-    formData.append('password', password);
-
-    const response = await fetch(`${this.baseUrl}/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: formData,
-    });
-
-    const data = await response.json();
-    if (data.access_token) {
-      this.setToken(data.access_token);
-    }
-    return data;
-  }
-
-  // ============ 分析 ============
-
-  async analyzeECG(file: File, leadType: string = 'single', patientId?: string) {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('lead_type', leadType);
-    if (patientId) {
-      formData.append('patient_id', patientId);
-    }
-
-    return this.request('/analyze/ecg', {
-      method: 'POST',
-      headers: {}, // 不设置 Content-Type 让浏览器自动设置
-      body: formData,
-    });
-  }
-
-  async getAnalysisResult(taskId: string) {
-    return this.request(`/analyze/${taskId}`);
-  }
-
-  // ============ 记录 ============
-
-  async getRecords(params: {
-    page?: number;
-    page_size?: number;
-    patient_id?: string;
-    start_date?: string;
-    end_date?: string;
-  } = {}) {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined) {
-        searchParams.append(key, String(value));
-      }
-    });
-    return this.request(`/records?${searchParams}`);
-  }
-
-  // ============ 系统 ============
-
-  async getHealth() {
-    return this.request('/health');
-  }
-
-  async getMetrics() {
-    return this.request('/metrics');
-  }
+  return data as T;
 }
-
-export const api = new ApiClient(API_BASE_URL);
-export default api;
+export function post<T>(path: string, body: unknown = {}) {return request<T>(path, {method:'POST', body:JSON.stringify(body)});}

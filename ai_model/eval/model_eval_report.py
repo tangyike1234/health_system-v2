@@ -1,100 +1,26 @@
-#!/usr/bin/env python3
-"""
-模型评估报告生成脚本
-
-生成测试数据集上的模型评估指标报告。
-
-用法:
-    python model_eval_report.py --model ecg_founder --data data/eval_clean
-    python model_eval_report.py --model ecg_arrhythmia --data data/eval_noise
-"""
-
+"""真实预测评价入口。取消原先固定 MOCK_RESULTS，不生成虚构实验指标。"""
 import argparse
 import json
-import sys
 from pathlib import Path
-from datetime import datetime
-from typing import Dict, List, Any
 
-# 模拟评估结果 (实际使用时替换为真实推理)
-MOCK_RESULTS = {
-    "ecg_founder": {
-        "accuracy": 0.952,
-        "sensitivity": 0.918,
-        "specificity": 0.965,
-        "f1_score": 0.923,
-        "avg_latency_ms": 230,
-        "throughput": 4.3
-    },
-    "ecg_arrhythmia": {
-        "accuracy": 0.938,
-        "sensitivity": 0.895,
-        "specificity": 0.958,
-        "f1_score": 0.912,
-        "avg_latency_ms": 45,
-        "throughput": 22.1
-    }
-}
+def evaluate(rows):
+    if not rows or any('true_label' not in r or 'predicted_label' not in r for r in rows):
+        raise ValueError('需要非空真实预测列表，每行含 true_label 和 predicted_label')
+    labels = sorted({r['true_label'] for r in rows} | {r['predicted_label'] for r in rows})
+    matrix = {a: {b: 0 for b in labels} for a in labels}
+    for r in rows: matrix[r['true_label']][r['predicted_label']] += 1
+    per_class = {}
+    for label in labels:
+        tp = matrix[label][label]
+        support = sum(matrix[label].values())
+        predicted = sum(matrix[a][label] for a in labels)
+        precision = tp/predicted if predicted else 0
+        recall = tp/support if support else 0
+        per_class[label] = {'precision': precision, 'recall': recall, 'f1': 2*precision*recall/(precision+recall) if precision+recall else 0, 'support': support}
+    return {'samples': len(rows), 'macro_f1': sum(v['f1'] for v in per_class.values())/len(labels), 'per_class': per_class, 'confusion_matrix': matrix, 'status': 'computed_from_supplied_predictions'}
 
-
-def load_test_data(data_path: Path) -> List[Dict]:
-    """加载测试数据"""
-    # 实际实现: 从文件加载测试数据
-    return []
-
-
-def run_evaluation(model_path: Path, data_path: Path, model_name: str) -> Dict:
-    """运行评估"""
-    # 实际实现: 加载模型，执行推理，计算指标
-    # 临时返回模拟结果
-    return MOCK_RESULTS.get(model_name, {})
-
-
-def generate_report(results: Dict, output_path: Path):
-    """生成报告"""
-    report = {
-        "generated_at": datetime.utcnow().isoformat(),
-        "model": args.model,
-        "data_path": str(args.data),
-        "metrics": results,
-        "status": "pending_validation"
-    }
-    
-    # 写入 JSON
-    with open(output_path, 'w') as f:
-        json.dump(report, f, indent=2)
-    
-    print(f"Report saved to: {output_path}")
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Model Evaluation Report Generator")
-    parser.add_argument("--model", required=True, choices=["ecg_founder", "ecg_arrhythmia"])
-    parser.add_argument("--data", required=True, help="Path to evaluation data")
-    parser.add_argument("--output", default="eval_report.json", help="Output report path")
-    
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='读取真实预测 JSON，不运行或假装已训练模型')
+    parser.add_argument('predictions', type=Path)
     args = parser.parse_args()
-    
-    model_path = Path(f"models/{args.model}")
-    data_path = Path(args.data)
-    output_path = Path(args.output)
-    
-    if not model_path.exists():
-        print(f"❌ Model not found: {model_path}")
-        sys.exit(1)
-    
-    if not data_path.exists():
-        print(f"❌ Data not found: {data_path}")
-        sys.exit(1)
-    
-    print(f"Running evaluation for {args.model}...")
-    results = run_evaluation(model_path, data_path, args.model)
-    
-    generate_report(results, output_path)
-    
-    print("\n📊 Evaluation Results:")
-    print(f"  Accuracy:    {results.get('accuracy', 'N/A'):.3f}")
-    print(f"  Sensitivity: {results.get('sensitivity', 'N/A'):.3f}")
-    print(f"  Specificity: {results.get('specificity', 'N/A'):.3f}")
-    print(f"  F1 Score:   {results.get('f1_score', 'N/A'):.3f}")
-    print(f"  Latency:    {results.get('avg_latency_ms', 'N/A')} ms")
+    print(json.dumps(evaluate(json.loads(args.predictions.read_text(encoding='utf-8'))), ensure_ascii=False, indent=2))

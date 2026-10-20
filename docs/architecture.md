@@ -42,3 +42,7 @@ Hardware → Backend → Frontend
 
 | 日期 | 更新内容 |
 |------|----------|
+# 本分支架构入口
+
+本次改造以 [overview](architecture/overview.md) 和 [五人分工](team_assignment.md) 为准。下文保留旧方案参考。
+
