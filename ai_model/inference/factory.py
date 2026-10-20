@@ -1,11 +1,21 @@
-"""唐一可：真实模型适配点；没有权重时不生成模拟分类。"""
+"""Classifier factory with an explicit unavailable default."""
+import os
 from typing import Protocol
 
 class Classifier(Protocol):
     def predict(self, processed: dict) -> dict: ...
 
-def load_classifier(model_type: str, model_path: str) -> Classifier:
-    raise NotImplementedError('模型尚未接入；需要核实导联、标签、采样率和权重许可')
+def load_classifier(model_type: str = 'none', model_path: str = '') -> Classifier | None:
+    if model_type in ('', 'none', 'unavailable'):
+        return None
+    if model_type == 'openecg':
+        from ai_model.inference.openecg_adapter import OpenEcgClassifier
+        return OpenEcgClassifier()
+    raise ValueError(f'不支持的分类器: {model_type}')
+
+
+def configured_classifier() -> Classifier | None:
+    return load_classifier(os.environ.get('ECG_MODEL_TYPE', 'none'))
 
 def predict(model: Classifier | None, signal_data: dict) -> dict:
     if model is None:
