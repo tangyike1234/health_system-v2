@@ -4,4 +4,4 @@
 
 依据[根 README](../README.md)，从仓库根目录运行 `python run_backend.py`。本目录 requirements.txt 是当前运行依赖；旧 config/middleware 仅保留参考，未自动启用。db/init.sql 指向唯一 schema 定义。Docker 说明见 deploy/deploy_backend.md。
 
-当前记录服务同步调用分析后保存 completed；没有 pending/running/failed 持久化队列。任务恢复、分页/趋势、导出删除为王书阁后续任务。默认 health 的 model 字段固定 unavailable，不是可选分类器的实时健康探测。
+当前上传/回放创建持久化任务并后台执行，查询 /tasks/{id} 仅限本人。重启后 pending/running 任务标为 failed，保留输入并提示重新提交。已支持分页、趋势和本人导出/删除。默认 health 的 model 字段固定 unavailable，不是可选分类器的实时健康探测。

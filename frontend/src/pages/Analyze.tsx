@@ -1,16 +1,19 @@
 // 王书阁：记录与分析页面；唐一可提供统一分析结果。
 import { useEffect, useState, FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { post, request, RecordResult } from '../services/api';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { post, request, RecordResult, AnalysisTask } from '../services/api';
 import Waveform from '../components/Waveform';
 export default function Analyze(){
   const {id}=useParams();const navigate=useNavigate();
+  const [search,setSearch]=useSearchParams(); const taskId=search.get("task");
+  const [task,setTask]=useState<AnalysisTask|null>(null);
+  useEffect(()=>{if(!taskId||id)return;let active=true;let timer:ReturnType<typeof setTimeout>;setTask(null);setError("");setBusy(true);async function poll(){try{const t=await request<AnalysisTask>("/tasks/"+taskId);if(!active)return;setTask(t);if(t.status==="completed"&&t.record_id){navigate("/records/"+t.record_id,{replace:true});setBusy(false);}else if(t.status==="failed"){setError(t.error||"分析失败，请重新提交");setBusy(false);}else{timer=setTimeout(poll,1000);}}catch(e){if(active){setError((e as Error).message);setBusy(false);}}}void poll();return()=>{active=false;clearTimeout(timer);};},[taskId,id,navigate]);
   const [file,setFile]=useState<File|null>(null),[rate,setRate]=useState(250),[record,setRecord]=useState<RecordResult|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   useEffect(()=>{let active=true;setRecord(null);setError('');if(id)request<RecordResult>('/records/'+id).then(r=>{if(active)setRecord(r);}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[id]);
-  async function run(replay=false){setBusy(true);setError('');try{let r:RecordResult;if(replay)r=await post('/acquisition/replay');else{if(!file)throw Error('请选择 CSV');const body=new FormData();body.append('file',file);body.append('sample_rate_hz',String(rate));r=await request('/analyze/ecg',{method:'POST',body});}navigate('/records/'+r.id);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+  async function run(replay=false){setBusy(true);setError('');try{let t:AnalysisTask;if(replay)t=await post('/acquisition/replay');else{if(!file)throw Error('请选择 CSV');const body=new FormData();body.append('file',file);body.append('sample_rate_hz',String(rate));t=await request('/analyze/ecg',{method:'POST',body});}setTask(t);setSearch({task:t.id});}catch(e){setError((e as Error).message);setBusy(false);}}
   return <section><p className="eyebrow">记录与分析 · 王书阁</p><h1>{id?'记录详情':'新建记录'}</h1>{!id&&<><p>首版支持单列 CSV（单位 mV，可含 value/sample/mv 表头）。采样率请按数据实际填写。</p><form onSubmit={(e:FormEvent)=>{e.preventDefault();void run();}}><label>CSV 文件<input type="file" accept=".csv" required onChange={e=>setFile(e.target.files?.[0]||null)} /></label><label>采样率 Hz<input type="number" min="50" max="2000" value={rate} onChange={e=>setRate(Number(e.target.value))} required /></label><div className="actions"><button disabled={busy}>导入并分析</button><button type="button" className="secondary" disabled={busy} onClick={()=>void run(true)}>使用合成回放</button></div></form></>}
-    <p role="status">{busy?'处理与保存中…':error}</p>{record&&<article>
-      <p>{new Date(record.created_at).toLocaleString()} · 来源：{record.result.source} · 时长：{record.result.duration_sec?.toFixed(1)}s</p>
+    {!id&&taskId&&<p>任务编号：{taskId}（刷新页面可继续查询）</p>}<p role="status">{error||(busy?(task?.status==='running'?'分析处理中…':'任务排队中…'):'')}</p>{record&&<article>
+      <p>{new Date(record.created_at).toLocaleString()} · 来源：{record.result.source} · 时长：{record.result.duration_sec?.toFixed(1)}s</p>{record.task_id&&<p>任务：{record.task_id} · 状态：{record.task_status}</p>}
       <h2>{record.result.quality.status==='insufficient'?'信号质量不足':'分析结果'}</h2>
       {record.result.quality.score!=null&&<p>质量评分：{record.result.quality.score} 分（{record.result.quality.grade}）</p>}
       <p>{record.result.quality.scope}</p>
@@ -29,6 +32,6 @@ export default function Analyze(){
         {record.result.prediction.explanation_detail?.next_steps&&record.result.prediction.explanation_detail.next_steps.length>0&&<><h2>下一步建议</h2><ul>{record.result.prediction.explanation_detail.next_steps.map((e,i)=><li key={i}>{e}</li>)}</ul></>}
         {record.result.prediction.explanation_detail?.provider&&<small>解释引擎：{record.result.prediction.explanation_detail.provider==='deepseek'?'DeepSeek 大模型':'本地模板'}</small>}
       </>}
-      {record.result.quality.status==='insufficient'&&<p>{record.result.prediction.explanation}</p>}
+      {(record.result.quality.status==='insufficient'||!record.result.prediction.label)&&<p>{record.result.prediction.explanation}</p>}
     </article>}</section>;
 }

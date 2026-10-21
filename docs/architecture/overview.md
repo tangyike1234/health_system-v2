@@ -27,7 +27,7 @@ ai_model/pipeline（唐一可） → process → 质量判断 → inference/fact
 
 ## 状态与边界
 
-- 同步框架：完成有效性处理并持久化后返回 completed；失败请求返回 HTTP 错误，不写成功结果。持久化 pending/running/failed 队列是王书阁下一阶段任务。
+- 任务框架：上传/回放返回 202 与 pending 任务；后台更新 running/completed/failed。文件格式错误直接拒绝，分析错误写入任务。重启后未完成任务标为 failed，提示重新提交。
 - 质量状态 independent：insufficient/basic_checks_passed；基础检查不等于完整信号质量判定。
 - 没模型返回 model_unavailable 和空标签；质量不足返回 skipped_quality；不输出固定正常/置信度。
 - 授权与身份每次由后端检查，session 存数据库，退出后失效；仅本地开发使用。

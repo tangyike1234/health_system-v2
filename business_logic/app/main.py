@@ -4,10 +4,12 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from app.api.router import router
 from app.services.storage import initialize
+from app.services.records import recover_tasks
 
 @asynccontextmanager
 async def lifespan(app):
     initialize()
+    recover_tasks()
     yield
 
 app = FastAPI(title='家庭心电辅助记录 · 五人协作框架', lifespan=lifespan)
