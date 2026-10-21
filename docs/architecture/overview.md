@@ -1,5 +1,7 @@
 # 原链路分析与重构设计
 
+总体说明依据[根 README](../../README.md)；本页原仓库问题为历史背景，不能当作当前实现现状。
+
 ## 原仓库的链路与断点
 
 原本计划：STM32/上传 → FastAPI → 信号处理 → AI → React/历史。
@@ -35,4 +37,8 @@ ai_model/pipeline（唐一可） → process → 质量判断 → inference/fact
 
 沿用 frontend、business_logic、hardware、signal_processing、ai_model、data、interfaces、docs。原 C 头文件、固件草案和模型扩展配置保留作参考。新增忽略规则，后续依赖通过清单重装；上游已跟踪的 node_modules/pyc 留作历史，建议下一次仓库维护时移出跟踪。原固定指标脚本改为根据传入真实预测计算指标。
 
-数据库权威结构在 app/services/storage.py，init.sql 指向该来源，避免双份 schema。Docker 构建上下文改为仓库根目录，以便导入跨领域模块。旧中间件和 config.py 为未挂载参考，不是当前安全或追踪能力的证明。
+数据库权威结构在 business_logic/app/services/storage.py，init.sql 指向该来源，避免双份 schema。Docker 构建上下文改为仓库根目录，以便导入跨领域模块。旧中间件和 config.py 为未挂载参考，不是当前安全或追踪能力的证明。
+
+## 2026-10-21 审查补充
+
+流水线已包含可选 OpenECG 与 evidence/解释模块；默认无分类器，不表示真实模型已验收。现有采集 CSV 测试与单列解析实现冲突。WebSocket 实际完整路径为 /api/v1/ws/realtime。完整审查及验证限制见[验证记录](../VALIDATION.md)。
