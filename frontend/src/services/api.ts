@@ -1,9 +1,20 @@
 // 共享请求适配；各业务页面由对应负责人维护。
 export interface RecordResult {
   id: string; created_at: string; task_status: string;
-  result: {source: string; waveform: number[]; sample_rate_hz: number; unit: string; duration_sec: number;
-    quality: {status: string; reasons: string[]; scope: string};
-    prediction: {status: string; label: string | null; confidence: number | null; explanation: string};};
+  result: {
+    source: string; waveform: number[]; sample_rate_hz: number; unit: string; duration_sec: number;
+    quality: {status: string; reasons: string[]; scope: string; score?: number; grade?: string};
+    prediction: {
+      status: string; label: string | null; confidence: number | null; explanation: string;
+      heart_rate?: {bpm: number; min_bpm?: number; max_bpm?: number; rr_cv?: number; regularity?: string};
+      beats?: {count: number; vpc_count?: number};
+      explanation_detail?: {
+        elderly_summary?: string; professional_interpretation?: string;
+        evidence?: string[]; uncertainty?: string[]; reassurance?: string;
+        next_steps?: string[]; risk_level?: string; provider?: string;
+      };
+    };
+  };
 }
 export interface RecordRow {id: string; created_at: string;}
 export interface Grant {id: string; username: string; active: number;}
