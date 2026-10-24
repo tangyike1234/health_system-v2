@@ -1,49 +1,36 @@
-"""
-AI 模型推理工厂
+"""Classifier factory with an explicit unavailable default."""
+import os
+from pathlib import Path
+from typing import Protocol
 
-占位函数，待实现。
-"""
+class Classifier(Protocol):
+    def predict(self, processed: dict) -> dict: ...
 
-from typing import Dict, Any, Optional
-
-
-class BaseModel:
-    """模型基类"""
-    
-    def load(self, model_path: str) -> None:
-        """加载模型"""
-        # TODO: 实现模型加载
-        pass
-    
-    def predict(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """推理"""
-        # TODO: 实现推理逻辑
-        pass
-    
-    def health_check(self) -> bool:
-        """健康检查"""
-        # TODO: 实现健康检查
-        pass
+def load_classifier(model_type: str = 'none', model_path: str = '') -> Classifier | None:
+    if model_type in ('', 'none', 'unavailable'):
+        return None
+    if model_type == 'openecg':
+        from ai_model.inference.openecg_adapter import OpenEcgClassifier
+        return OpenEcgClassifier()
+    raise ValueError(f'不支持的分类器: {model_type}')
 
 
-def load_classifier(model_type: str, model_path: str) -> BaseModel:
-    """
-    加载分类器
-    
-    TODO:
-        - 支持 ECGFounder
-        - 支持 ECG-Arrhythmia
-    """
-    pass
+def configured_classifier() -> Classifier | None:
+    model_type = os.environ.get('ECG_MODEL_TYPE')
+    if model_type is None:
+        env_file = Path(__file__).resolve().parents[2] / '.env'
+        try:
+            for line in env_file.read_text(encoding='utf-8').splitlines():
+                key, separator, value = line.partition('=')
+                if separator and key.strip() == 'ECG_MODEL_TYPE':
+                    model_type = value.strip().strip('"').strip("'")
+                    break
+        except OSError:
+            pass
+    return load_classifier(model_type or 'none')
 
-
-def predict(model: BaseModel, signal_data: Any) -> Dict[str, Any]:
-    """
-    执行推理
-    
-    TODO:
-        - 输入校验
-        - 调用模型
-        - 结果封装
-    """
-    pass
+def predict(model: Classifier | None, signal_data: dict) -> dict:
+    if model is None:
+        return {'status': 'model_unavailable', 'label': None, 'confidence': None,
+                'model_version': None, 'explanation': '真实模型尚未接入，不输出正常或异常分类'}
+    return model.predict(signal_data)

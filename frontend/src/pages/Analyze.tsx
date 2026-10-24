@@ -1,249 +1,37 @@
-/**
- * 分析页面
- */
-
-import { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Upload, FileText, CheckCircle, XCircle } from 'lucide-react';
-import { useAnalysisStore } from '../stores';
-import api from '../services/api';
-
-const Analyze = () => {
-  const [file, setFile] = useState<File | null>(null);
-  const [leadType, setLeadType] = useState<'single' | '12-lead'>('single');
-  const [isUploading, setIsUploading] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const { status, result, error, setStatus, setResult, setError, reset } = useAnalysisStore();
-  const navigate = useNavigate();
-
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    
-    const files = e.dataTransfer.files;
-    if (files && files[0]) {
-      handleFile(files[0]);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files[0]) {
-      handleFile(files[0]);
-    }
-  };
-
-  const handleFile = (selectedFile: File) => {
-    const validExtensions = ['.dat', '.csv', '.edf'];
-    const ext = selectedFile.name.substring(selectedFile.name.lastIndexOf('.')).toLowerCase();
-    
-    if (!validExtensions.includes(ext)) {
-      setError('不支持的文件格式，请上传 .dat、.csv 或 .edf 文件');
-      return;
-    }
-    
-    setFile(selectedFile);
-    reset();
-  };
-
-  const handleUpload = async () => {
-    if (!file) return;
-    
-    setIsUploading(true);
-    setStatus('uploading');
-    setError(null);
-
-    try {
-      const response = await api.analyzeECG(file, leadType) as any;
-      setStatus('processing');
-      
-      // 轮询结果
-      const pollResult = async () => {
-        const result = await api.getAnalysisResult(response.task_id) as any;
-        if (result.status === 'completed') {
-          setResult(result);
-        } else if (result.status === 'failed') {
-          setError('分析失败');
-        } else {
-          setTimeout(pollResult, 1000);
-        }
-      };
-      
-      pollResult();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '上传失败');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-gray-800">ECG 分析</h1>
-
-      {/* 文件上传区域 */}
-      <div
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-          dragActive
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400'
-        }`}
-        onDragEnter={handleDrag}
-        onDragLeave={handleDrag}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".dat,.csv,.edf"
-          onChange={handleFileChange}
-          className="hidden"
-        />
-        
-        {file ? (
-          <div className="flex items-center justify-center gap-3">
-            <FileText className="w-8 h-8 text-blue-500" />
-            <div className="text-left">
-              <p className="font-medium">{file.name}</p>
-              <p className="text-sm text-gray-500">
-                {(file.size / 1024 / 1024).toFixed(2)} MB
-              </p>
-            </div>
-            <button
-              onClick={() => setFile(null)}
-              className="ml-4 text-gray-400 hover:text-gray-600"
-            >
-              <XCircle className="w-5 h-5" />
-            </button>
-          </div>
-        ) : (
-          <>
-            <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600 mb-2">
-              拖拽文件到此处或{' '}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="text-blue-600 hover:underline"
-              >
-                点击上传
-              </button>
-            </p>
-            <p className="text-sm text-gray-400">
-              支持 .dat、.csv、.edf 格式
-            </p>
-          </>
-        )}
-      </div>
-
-      {/* 导联类型 */}
-      <div className="card">
-        <div className="card-body">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            导联类型
-          </label>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="leadType"
-                value="single"
-                checked={leadType === 'single'}
-                onChange={() => setLeadType('single')}
-                className="text-blue-600"
-              />
-              <span>单导联</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="leadType"
-                value="12-lead"
-                checked={leadType === '12-lead'}
-                onChange={() => setLeadType('12-lead')}
-                className="text-blue-600"
-              />
-              <span>12 导联</span>
-            </label>
-          </div>
+// 王书阁：记录与分析页面；唐一可提供统一分析结果。
+import { useEffect, useState, FormEvent } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { post, request, RecordResult, AnalysisTask } from '../services/api';
+import Waveform from '../components/Waveform';
+export default function Analyze(){
+  const {id}=useParams();const navigate=useNavigate();
+  const [search,setSearch]=useSearchParams(); const taskId=search.get("task");
+  const [task,setTask]=useState<AnalysisTask|null>(null);
+  useEffect(()=>{if(!taskId||id)return;let active=true;let timer:ReturnType<typeof setTimeout>;setTask(null);setError("");setBusy(true);async function poll(){try{const t=await request<AnalysisTask>("/tasks/"+taskId);if(!active)return;setTask(t);if(t.status==="completed"&&t.record_id){navigate("/records/"+t.record_id,{replace:true});setBusy(false);}else if(t.status==="failed"){setError(t.error||"分析失败，请重新提交");setBusy(false);}else{timer=setTimeout(poll,1000);}}catch(e){if(active){setError((e as Error).message);setBusy(false);}}}void poll();return()=>{active=false;clearTimeout(timer);};},[taskId,id,navigate]);
+  const [file,setFile]=useState<File|null>(null),[rate,setRate]=useState(250),[record,setRecord]=useState<RecordResult|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+  useEffect(()=>{let active=true;setRecord(null);setError('');if(id)request<RecordResult>('/records/'+id).then(r=>{if(active)setRecord(r);}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[id]);
+  async function run(replay=false){setBusy(true);setError('');try{let t:AnalysisTask;if(replay)t=await post('/acquisition/replay');else{if(!file)throw Error('请选择 CSV');const body=new FormData();body.append('file',file);body.append('sample_rate_hz',String(rate));t=await request('/analyze/ecg',{method:'POST',body});}setTask(t);setSearch({task:t.id});}catch(e){setError((e as Error).message);setBusy(false);}}
+  return <section><p className="eyebrow">记录与分析 · 王书阁</p><h1>{id?'记录详情':'新建记录'}</h1>{!id&&<><p>首版支持单列 CSV（单位 mV，可含 value/sample/mv 表头）。采样率请按数据实际填写。</p><form onSubmit={(e:FormEvent)=>{e.preventDefault();void run();}}><label>CSV 文件<input type="file" accept=".csv" required onChange={e=>setFile(e.target.files?.[0]||null)} /></label><label>采样率 Hz<input type="number" min="50" max="2000" value={rate} onChange={e=>setRate(Number(e.target.value))} required /></label><div className="actions"><button disabled={busy}>导入并分析</button><button type="button" className="secondary" disabled={busy} onClick={()=>void run(true)}>使用合成回放</button></div></form></>}
+    {!id&&taskId&&<p>任务编号：{taskId}（刷新页面可继续查询）</p>}<p role="status">{error||(busy?(task?.status==='running'?'分析处理中…':'任务排队中…'):'')}</p>{record&&<article>
+      <p>{new Date(record.created_at).toLocaleString()} · 来源：{record.result.source} · 时长：{record.result.duration_sec?.toFixed(1)}s</p>{record.task_id&&<p>任务：{record.task_id} · 状态：{record.task_status}</p>}
+      <h2>{record.result.quality.status==='insufficient'?'信号质量不足':'分析结果'}</h2>
+      {record.result.quality.score!=null&&<p>质量评分：{record.result.quality.score} 分（{record.result.quality.grade}）</p>}
+      <p>{record.result.quality.scope}</p>
+      {record.result.quality.reasons.length>0&&<p>注意：{record.result.quality.reasons.join('；')}</p>}
+      <Waveform values={record.result.waveform} duration={record.result.duration_sec} unit={record.result.unit} />
+      {record.result.quality.status!=='insufficient'&&record.result.prediction.label&&<>
+        <div className="grid">
+          <article><h2>分类结果</h2><p>{record.result.prediction.label==='normal'?'正常窦性节律':record.result.prediction.label}</p><p>置信度：{record.result.prediction.confidence!=null?`${(record.result.prediction.confidence*100).toFixed(0)}%`:'—'}</p></article>
+          <article><h2>心率</h2><p>{record.result.prediction.heart_rate?.bpm?`${record.result.prediction.heart_rate.bpm} 次/分`:'—'}</p><p>节律：{record.result.prediction.heart_rate?.regularity||'—'}</p></article>
+          <article><h2>心拍统计</h2><p>共 {record.result.prediction.beats?.count??'—'} 个心拍</p><p>室性早搏：{record.result.prediction.beats?.vpc_count??0} 次</p></article>
         </div>
-      </div>
-
-      {/* 上传按钮 */}
-      <button
-        onClick={handleUpload}
-        disabled={!file || isUploading}
-        className="btn btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isUploading ? '上传中...' : '开始分析'}
-      </button>
-
-      {/* 错误显示 */}
-      {error && (
-        <div className="alert-critical border p-4 rounded flex items-center gap-2">
-          <XCircle className="w-5 h-5" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* 结果显示 */}
-      {result && (
-        <div className="card">
-          <div className="card-header flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-green-500" />
-            <span>分析完成</span>
-          </div>
-          <div className="card-body space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-gray-500">心律</p>
-                <p className="text-lg font-medium">
-                  {result.result?.classification?.rhythm === 'normal' ? '正常' : result.result?.classification?.rhythm}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">置信度</p>
-                <p className="text-lg font-medium">
-                  {Math.round(result.result?.classification?.confidence * 100)}%
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">信号质量</p>
-                <p className="text-lg font-medium">
-                  {Math.round(result.result?.signal_quality * 100)}%
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">处理时间</p>
-                <p className="text-lg font-medium">
-                  {result.result?.processing_time_ms} ms
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => navigate('/records')}
-              className="btn btn-secondary w-full"
-            >
-              查看历史记录
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default Analyze;
+        {record.result.prediction.explanation_detail?.elderly_summary&&<aside style={{marginTop:20}}><h2 style={{marginTop:0}}>通俗说明</h2><p style={{fontSize:16}}>{record.result.prediction.explanation_detail.elderly_summary}</p></aside>}
+        {record.result.prediction.explanation_detail?.professional_interpretation&&<><h2>专业解读</h2><p>{record.result.prediction.explanation_detail.professional_interpretation}</p></>}
+        {record.result.prediction.explanation_detail?.evidence&&record.result.prediction.explanation_detail.evidence.length>0&&<><h2>分析依据</h2><ul>{record.result.prediction.explanation_detail.evidence.map((e,i)=><li key={i}>{e}</li>)}</ul></>}
+        {record.result.prediction.explanation_detail?.uncertainty&&record.result.prediction.explanation_detail.uncertainty.length>0&&<><h2>不确定说明</h2><ul>{record.result.prediction.explanation_detail.uncertainty.map((e,i)=><li key={i}>{e}</li>)}</ul></>}
+        {record.result.prediction.explanation_detail?.next_steps&&record.result.prediction.explanation_detail.next_steps.length>0&&<><h2>下一步建议</h2><ul>{record.result.prediction.explanation_detail.next_steps.map((e,i)=><li key={i}>{e}</li>)}</ul></>}
+        {record.result.prediction.explanation_detail?.provider&&<small>解释引擎：{record.result.prediction.explanation_detail.provider==='deepseek'?'DeepSeek 大模型':'本地模板'}</small>}
+      </>}
+      {(record.result.quality.status==='insufficient'||!record.result.prediction.label)&&<p>{record.result.prediction.explanation}</p>}
+    </article>}</section>;
+}

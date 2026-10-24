@@ -1,0 +1,38 @@
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+.env
+runtime/
+frontend/dist/
+.pytest_cache/
+*.tsbuildinfo
+
+.venv-tasks/
+
+# Local credentials and runtime data
+.env.*
+!.env.example
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3-wal
+*.sqlite3-shm
+*.log
+
+# Installed model weights and caches
+*.onnx
+*.pt
+*.pth
+*.ckpt
+.cache/
+
+# Only publish the documented public ECG fixture
+/csv/**
+!/csv/README.md
+!/csv/LICENSE-PTBXL.txt
+!/csv/ptbxl_00001_lead_II_500Hz_10s.csv
+!/csv/ptbxl_00001_provenance.json
+/test_ecg_normal.csv

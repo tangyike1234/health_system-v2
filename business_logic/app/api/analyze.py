@@ -1,101 +1,59 @@
-"""
-分析接口
-"""
+"""王书阁：记录及分析使用流程。首版只解析单列 CSV。"""
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import Response
+from app.api.auth import current_user
+from app.services import records
+from signal_processing.python.ecg_preprocessing import parse_csv
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
-from typing import Optional
-import uuid
-from datetime import datetime
+router = APIRouter(tags=['记录与分析'])
 
-router = APIRouter()
+@router.post('/analyze/ecg', status_code=202)
+async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...), sample_rate_hz: float = Form(...),
+                 user: str = Depends(current_user)):
+    if not file.filename or not file.filename.lower().endswith('.csv'):
+        raise ValueError('首版仅支持单列 CSV；WFDB/EDF 解析待信号模块扩展')
+    content = await file.read(2_000_001)
+    if len(content) > 2_000_000:
+        raise HTTPException(413, 'CSV 最大 2 MB')
+    try:
+        text = content.decode('utf-8-sig')
+    except UnicodeDecodeError:
+        raise ValueError('CSV 请使用 UTF-8 编码')
+    task = records.submit(user, parse_csv(text, sample_rate_hz))
+    background_tasks.add_task(records.execute, task['id'])
+    return task
 
+@router.get('/tasks/{task_id}')
+def task(task_id: str, user: str = Depends(current_user)):
+    return records.task_status(user, task_id)
 
-@router.post("/analyze/ecg")
-async def analyze_ecg(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    lead_type: str = Form("single"),
-    patient_id: Optional[str] = Form(None)
-):
-    """
-    提交 ECG 数据进行分析
-    
-    Args:
-        file: ECG 数据文件
-        lead_type: 导联类型 (single / 12-lead)
-        patient_id: 患者标识
-    
-    Returns:
-        任务 ID 和状态
-    """
-    # 验证文件类型
-    if file.filename and not file.filename.endswith(('.dat', '.csv', '.edf')):
-        raise HTTPException(
-            status_code=400,
-            detail="不支持的文件格式，请上传 .dat、.csv 或 .edf 文件"
-        )
-    
-    # 生成任务 ID
-    task_id = str(uuid.uuid4())
-    
-    # 后台处理
-    background_tasks.add_task(process_ecg_task, task_id, file, lead_type, patient_id)
-    
-    return {
-        "task_id": task_id,
-        "status": "pending",
-        "created_at": datetime.utcnow().isoformat()
-    }
+@router.get('/records')
+def listing(shared: bool = False, page: int | None = Query(default=None, ge=1),
+            page_size: int = Query(default=20, ge=1, le=100),
+            user: str = Depends(current_user)):
+    return records.list_records(user, shared, page, page_size)
 
+@router.get('/records/trends')
+def trends(shared: bool = False, days: int = Query(default=30, ge=1, le=365),
+           user: str = Depends(current_user)):
+    return records.trend(user, shared, days)
 
-async def process_ecg_task(task_id: str, file: UploadFile, 
-                          lead_type: str, patient_id: Optional[str]):
-    """后台处理 ECG 分析任务"""
-    # TODO: 实现处理逻辑
-    pass
+@router.get('/records/{identifier}/export')
+def export(identifier: str, format: str = Query(default='csv', pattern='^(csv|json)$'),
+           user: str = Depends(current_user)):
+    content, media_type = records.export_record(user, identifier, format)
+    filename = f'ecg-record-{identifier}.{format}'
+    return Response(content=content, media_type=media_type,
+                    headers={'Content-Disposition': f'attachment; filename="{filename}"'})
 
+@router.delete('/records/{identifier}')
+def delete(identifier: str, user: str = Depends(current_user)):
+    return records.delete_record(user, identifier)
 
-@router.get("/analyze/{task_id}")
-async def get_analysis_result(task_id: str):
-    """
-    查询分析任务状态与结果
-    
-    Args:
-        task_id: 任务 ID
-    
-    Returns:
-        任务状态和结果
-    """
-    # TODO: 从数据库查询任务状态
-    # 临时返回示例
-    return {
-        "task_id": task_id,
-        "status": "completed",
-        "result": {
-            "classification": {
-                "rhythm": "normal",
-                "confidence": 0.95
-            },
-            "findings": [],
-            "signal_quality": 0.87,
-            "processing_time_ms": 234
-        },
-        "created_at": "2026-10-19T12:00:00Z",
-        "completed_at": "2026-10-19T12:00:00.234Z"
-    }
+@router.get('/records/{identifier}')
+def detail(identifier: str, user: str = Depends(current_user)):
+    return records.detail(user, identifier)
 
-
-@router.get("/records")
-async def get_records(
-    page: int = 1,
-    page_size: int = 20,
-    patient_id: Optional[str] = None
-):
-    """获取分析记录列表"""
-    # TODO: 实现分页查询
-    return {
-        "total": 0,
-        "page": page,
-        "page_size": page_size,
-        "items": []
-    }
+@router.get('/analyze/{identifier}')
+def analysis_status(identifier: str, user: str = Depends(current_user)):
+    return records.detail(user, identifier)
