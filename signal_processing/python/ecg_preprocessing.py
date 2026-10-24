@@ -6,8 +6,24 @@ import math
 def parse_csv(text, sample_rate_hz):
     rows = list(csv.reader(io.StringIO(text)))
     values = []
+    hardware_column = None
+    if rows:
+        header = [cell.strip().lower() for cell in rows[0]]
+        if 'ecg_filtered' in header:
+            hardware_column = header.index('ecg_filtered')
+
     for index, row in enumerate(rows):
         if not row or not row[0].strip():
+            continue
+        if hardware_column is not None:
+            if index == 0:
+                continue
+            if len(row) <= hardware_column:
+                raise ValueError('硬件 CSV 缺少 ecg_filtered 列值')
+            try:
+                values.append(float(row[hardware_column]))
+            except ValueError:
+                raise ValueError('硬件 CSV 的 ecg_filtered 列必须为数值')
             continue
         if len(row) != 1:
             raise ValueError('CSV 必须为单列信号，不能把时间列当幅值')
@@ -17,7 +33,7 @@ def parse_csv(text, sample_rate_hz):
             if index == 0 and row[0].strip().lower() in ('value', 'sample', 'mv'):
                 continue
             raise ValueError('CSV 仅支持单列数值，可含 value/sample/mv 表头')
-    return {'samples': values, 'sample_rate_hz': sample_rate_hz, 'unit': 'mV', 'lead': 'user_single_lead', 'source': 'csv_import'}
+    return {'samples': values, 'sample_rate_hz': sample_rate_hz, 'unit': 'mV', 'lead': 'hardware_filtered' if hardware_column is not None else 'user_single_lead', 'source': 'hardware_csv' if hardware_column is not None else 'csv_import'}
 
 def process(signal):
     values = signal.get('samples', [])

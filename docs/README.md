@@ -17,6 +17,8 @@
 
 - [验证与审查](VALIDATION.md)
 - [模型指标](status/metrics.md)
+- [项目审查记录（2026-10-21）](REVIEW_RECORD_2026-10-21.md)
+- [组员行动报告（2026-10-21）](TEAM_ACTION_REPORT_2026-10-21.md)
 
 ## 其他
 

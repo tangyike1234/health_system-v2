@@ -30,6 +30,38 @@ cd frontend
 npm run build
 ```
 
+## 可选 OpenECG 安装与公开测试数据
+
+基础依赖只运行网站框架和测试；需要真实 OpenECG 分类时，另外使用项目虚拟环境安装 requirements-ai.txt。该文件固定已完成本机联调的 openecg[report]==0.11.0，模型依赖和权重不上传 Git。
+
+Windows PowerShell（仓库根目录）：
+
+    .venv/Scripts/python.exe -m pip install -r requirements-ai.txt
+    Copy-Item .env.example .env
+
+仅在首次配置时复制模板，已有 .env 不要覆盖。将其中 ECG_MODEL_TYPE 改为 openecg，再启动或重启后端。系统环境变量优先于项目根目录 .env，未配置时默认 none。模板不含真实密钥。
+
+    .venv/Scripts/python.exe run_backend.py
+
+模型首次运行可能需要获取模型资源，请确保网络可用。当前适配器只接受 500 Hz、至少 10 秒的单导联 mV 信号，并仅分析前 10 秒。不能通过改填采样率或重复数据来凑时长。
+
+已提供 csv/ptbxl_00001_lead_II_500Hz_10s.csv：PTB-XL 公开记录的 II 导联，5000 点、500 Hz、10 秒。导入时采样率填 500，来源、转换说明及 CC BY 4.0 许可见 [样本说明](csv/README.md)。旧记录不会自动重新分析；安装或调整模型后需要重启后端并创建新记录。
+
+外部解释模块目前读取进程环境变量，单独在 .env 填写 DeepSeek 变量不会启用远程解释。没有显式启用时使用本地模板；API Key 不提交 Git。OpenECG 分类成功与外部大模型解释是两项独立功能。
+
+## 目录与提交边界
+
+| 目录/文件 | 用途 |
+|---|---|
+| tests/ | pytest 配置及全部自动测试；CI 执行 python -m pytest tests -q |
+| csv/ | 公开联调 CSV、来源 JSON 和许可；不存放测试 Python 脚本 |
+| runtime/ | 本机数据库、任务、上传和运行产物，不提交 |
+| requirements-dev.txt | 基础后端与自动测试依赖 |
+| requirements-ai.txt | 可选真实 ECG 模型依赖 |
+| .env.example | 可提交的配置模板；实际 .env、密钥不提交 |
+
+.venv、.venv-tasks、node_modules、构建产物、模型权重和缓存均不提交。csv/ 只允许已注明来源的公开样本进入版本管理；其他本地数据保留在电脑上。自动测试强制使用 none 分类器和本地解释模板，不依赖个人 .env、下载的模型或外部 API。
+
 ## 五人分工
 
 | 成员 | 主责业务 | 对应代码 |
@@ -58,7 +90,7 @@ flowchart LR
 ## 已接通与待开发
 
 - 已接通：账号注册/登录/退出、受保护 API、CSV/合成输入、基础有效性检查、波形、SQLite 记录保存与详情、家属直接授权及撤回、站内授权提示。
-- 质量仅检查长度、有限数值与平直，不表示已完成噪声检测。心率为 null；正式滤波、R 峰、真实模型及硬件均待实现。
+- 基础质量仅检查长度、有限数值与平直，不表示已完成噪声检测。默认框架模式不生成心率；可选 OpenECG 路径能产生分类与心率，但不等于已完成自研信号算法或模型性能评价。
 - 未接模型返回 `model_unavailable`，质量不足返回 `skipped_quality`；分类与置信字段为空，不输出模拟“正常”。WebSocket 未就绪时拒绝连接，不返回固定心率。
 - 当前上传/回放返回 HTTP 202 和任务编号，由后台执行，状态通过 `/api/v1/tasks/{id}` 查询；`task_status=completed` 表示流水线结束，不代表已产生 AI 分类。任务状态和输入已持久化；重启后未完成任务标为 failed 并提示重新提交。历史分页、记录趋势汇总、本人 CSV/JSON 导出和删除已实现；邀请确认及外部健康警报仍待开发。
 - 单导联心拍任务优先；原 ECGFounder 12 导联清单是扩展参考，不是当前已加载模型。
